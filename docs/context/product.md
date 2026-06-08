@@ -16,7 +16,7 @@ WikiAI is currently implemented as a functional MVP scaffold.
 
 WikiAI should sit between a traditional encyclopedia and a modern answer engine:
 
-- From Wikipedia, it inherits structured canonical articles, revision history, and topic depth.
+- From established encyclopedia platforms, it inherits structured canonical articles, revision history, and topic depth.
 - From Notion, it inherits clean information architecture and modular content presentation.
 - From Perplexity and ChatGPT, it inherits natural-language search, summaries, and conversational explanation.
 - From scientific and institutional knowledge systems, it inherits explicit evidence handling and trust scoring.

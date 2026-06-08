@@ -11,7 +11,7 @@ export default async function HomePage() {
       <SiteHeader />
       <section className="mx-auto grid max-w-7xl gap-8 px-6 pb-8 pt-6 lg:grid-cols-[1.25fr_0.75fr] lg:px-10">
         <div className="space-y-8">
-          <Badge>Wikipedia 2.0 MVP</Badge>
+          <Badge>Trust-Centric Knowledge MVP</Badge>
           <div className="space-y-6">
             <h1 className="max-w-4xl font-serif text-5xl leading-[0.95] tracking-tight md:text-7xl">
               The most transparent way to ask for knowledge.
@@ -100,4 +100,3 @@ export default async function HomePage() {
     </main>
   );
 }
-
