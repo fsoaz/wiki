@@ -196,3 +196,45 @@ class AuthSessionInfo(BaseModel):
     user_email: str
     user_role: str
     created_at: str
+
+
+class ClaimCitation(BaseModel):
+    id: str
+    source_id: str
+    evidence_span: str
+    support_type: str
+
+
+class Claim(BaseModel):
+    id: str
+    article_slug: str
+    claim_text: str
+    claim_type: str
+    section_key: str
+    status: str
+    confidence: float
+    citations: list[ClaimCitation] = []
+
+
+class Entity(BaseModel):
+    id: str
+    name: str
+    entity_type: str
+    canonical_slug: str
+    description: str
+
+
+class EntityRelationship(BaseModel):
+    id: str
+    subject_slug: str
+    subject_name: str
+    predicate: str
+    object_slug: str
+    object_name: str
+    confidence: float
+
+
+class EntityGraph(BaseModel):
+    entity: Entity
+    relationships: list[EntityRelationship]
+    article_slugs: list[str]

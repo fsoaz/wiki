@@ -322,3 +322,35 @@ CREATE TABLE moderation_events (
     reviewer_id UUID REFERENCES users(id),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE claim_citations (
+    id UUID PRIMARY KEY,
+    claim_id UUID NOT NULL REFERENCES claims(id) ON DELETE CASCADE,
+    source_id TEXT NOT NULL,
+    evidence_span TEXT NOT NULL DEFAULT '',
+    support_type TEXT NOT NULL DEFAULT 'supports'
+);
+
+CREATE TABLE entities (
+    id UUID PRIMARY KEY,
+    name TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    canonical_slug TEXT UNIQUE NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE entity_relationships (
+    id UUID PRIMARY KEY,
+    subject_entity_id UUID NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+    predicate TEXT NOT NULL,
+    object_entity_id UUID NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+    confidence NUMERIC(4,3) NOT NULL DEFAULT 1.0,
+    source_claim_id UUID REFERENCES claims(id)
+);
+
+CREATE TABLE article_entities (
+    article_id UUID NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+    entity_id UUID NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+    PRIMARY KEY (article_id, entity_id)
+);

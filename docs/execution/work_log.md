@@ -1,5 +1,20 @@
 # Work Log
 
+## 2026-06-13
+
+- assessed gap between epistemic database vision and actual MVP implementation
+- identified core misalignment: project was website-first; database served the website rather than being the product
+- implemented atomic claims layer: `ClaimRecord`, `ClaimCitationRecord` ORM models and seed data
+- implemented knowledge graph: `EntityRecord`, `EntityRelationshipRecord`, `ArticleEntityRecord` ORM models
+- added 6 machine-readable API endpoints: claims list, claim detail, entity list, entity graph, article JSON-LD, full export
+- seeded 6 atomic claims (3 per article) with citation links to source IDs and per-claim confidence scores
+- seeded 8 entities and 6 typed relationships forming a traversable knowledge graph
+- added Schema.org JSON-LD output for articles and full `@graph` bulk export
+- updated `product.md` core principles: `Database-first` is now the first principle
+- updated `architecture.md`: new "Knowledge Graph and Machine-Readable API" section with endpoint table
+- updated FastAPI app description to reflect database-first positioning
+- extended `001_init.sql` with `claim_citations`, `entities`, `entity_relationships`, `article_entities` tables
+
 ## 2026-06-07
 
 - assessed repository state and confirmed it is a docs-first greenfield workspace

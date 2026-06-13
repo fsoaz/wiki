@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 
-from .models import Article, ArticleSummary, ChatResponse, SearchResponse
+from .models import Article, ArticleSummary, ChatResponse, Entity, SearchResponse
 from .repository import search_articles
 
 
@@ -47,3 +47,57 @@ def build_chat_response(article: Article, question: str) -> ChatResponse:
             "Returned the top supporting sources attached to the relevant claims.",
         ],
     )
+
+
+def build_jsonld_article(article: Article) -> dict:
+    return {
+        "@context": "https://schema.org",
+        "@type": "Article",
+        "@id": f"/articles/{article.slug}",
+        "name": article.title,
+        "description": article.summary,
+        "dateModified": str(article.last_verified_at),
+        "creditText": f"confidence:{article.confidence_score}",
+        "articleSection": [
+            {
+                "@type": "WebPageElement",
+                "name": section.heading,
+                "text": section.content,
+                "citation": section.citations,
+            }
+            for section in article.sections
+        ],
+        "citation": [
+            {
+                "@type": "CreativeWork",
+                "@id": source.id,
+                "name": source.title,
+                "publisher": {"@type": "Organization", "name": source.publisher},
+                "url": source.url,
+                "datePublished": str(source.published_at),
+                "additionalProperty": {
+                    "@type": "PropertyValue",
+                    "name": "evidenceTier",
+                    "value": source.tier,
+                },
+            }
+            for source in article.sources
+        ],
+    }
+
+
+def build_jsonld_export(articles: list[Article], entities: list[Entity]) -> dict:
+    return {
+        "@context": "https://schema.org",
+        "@graph": [build_jsonld_article(a) for a in articles]
+        + [
+            {
+                "@type": "Thing",
+                "@id": f"/entities/{e.canonical_slug}",
+                "name": e.name,
+                "description": e.description,
+                "additionalType": e.entity_type,
+            }
+            for e in entities
+        ],
+    }

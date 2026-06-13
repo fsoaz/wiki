@@ -4,11 +4,16 @@ from sqlalchemy.orm import Session, selectinload
 from uuid import uuid4
 
 from .db_models import (
+    ArticleEntityRecord,
     AuditLogRecord,
     ArticleRecord,
     ArticleSectionRecord,
     ArticleSourceSubmissionRecord,
     ArticleSuggestionRecord,
+    ClaimCitationRecord,
+    ClaimRecord,
+    EntityRecord,
+    EntityRelationshipRecord,
     ReviewDecisionRecord,
     ReviewQueueItemRecord,
     SessionTokenRecord,
@@ -25,7 +30,12 @@ from .models import (
     AuthUser,
     AuthLoginRequest,
     AuthSessionInfo,
+    Claim,
+    ClaimCitation,
     ContributorOverview,
+    Entity,
+    EntityGraph,
+    EntityRelationship,
     ReviewAssignment,
     ReviewDecision,
     ReviewDecisionCreate,
@@ -637,3 +647,100 @@ def admin_revoke_session(session: Session, session_id: str, user: AuthUser) -> b
     session.delete(record)
     session.commit()
     return True
+
+
+def _hydrate_claim(article_slug: str, record: ClaimRecord) -> Claim:
+    return Claim(
+        id=record.id,
+        article_slug=article_slug,
+        claim_text=record.claim_text,
+        claim_type=record.claim_type,
+        section_key=record.section_key,
+        status=record.status,
+        confidence=record.confidence,
+        citations=[
+            ClaimCitation(
+                id=c.id,
+                source_id=c.source_id,
+                evidence_span=c.evidence_span,
+                support_type=c.support_type,
+            )
+            for c in record.citations
+        ],
+    )
+
+
+def get_claims_by_article(session: Session, article_slug: str) -> list[Claim] | None:
+    article = session.scalars(select(ArticleRecord).where(ArticleRecord.slug == article_slug)).first()
+    if article is None:
+        return None
+    records = session.scalars(
+        select(ClaimRecord)
+        .options(selectinload(ClaimRecord.citations))
+        .where(ClaimRecord.article_id == article.id)
+        .order_by(ClaimRecord.created_at.asc())
+    ).all()
+    return [_hydrate_claim(article.slug, r) for r in records]
+
+
+def get_claim_by_id(session: Session, claim_id: str) -> Claim | None:
+    record = session.scalars(
+        select(ClaimRecord)
+        .options(selectinload(ClaimRecord.citations))
+        .where(ClaimRecord.id == claim_id)
+    ).first()
+    if record is None:
+        return None
+    article = session.get(ArticleRecord, record.article_id)
+    return _hydrate_claim(article.slug if article else "", record)
+
+
+def list_entities(session: Session) -> list[Entity]:
+    records = session.scalars(select(EntityRecord).order_by(EntityRecord.name.asc())).all()
+    return [
+        Entity(
+            id=r.id,
+            name=r.name,
+            entity_type=r.entity_type,
+            canonical_slug=r.canonical_slug,
+            description=r.description,
+        )
+        for r in records
+    ]
+
+
+def get_entity_graph(session: Session, slug: str) -> EntityGraph | None:
+    record = session.scalars(
+        select(EntityRecord)
+        .options(
+            selectinload(EntityRecord.outgoing_relationships).selectinload(
+                EntityRelationshipRecord.object_entity
+            ),
+            selectinload(EntityRecord.article_entities).selectinload(ArticleEntityRecord.article),
+        )
+        .where(EntityRecord.canonical_slug == slug)
+    ).first()
+    if record is None:
+        return None
+    return EntityGraph(
+        entity=Entity(
+            id=record.id,
+            name=record.name,
+            entity_type=record.entity_type,
+            canonical_slug=record.canonical_slug,
+            description=record.description,
+        ),
+        relationships=[
+            EntityRelationship(
+                id=rel.id,
+                subject_slug=record.canonical_slug,
+                subject_name=record.name,
+                predicate=rel.predicate,
+                object_slug=rel.object_entity.canonical_slug,
+                object_name=rel.object_entity.name,
+                confidence=rel.confidence,
+            )
+            for rel in record.outgoing_relationships
+        ],
+        article_slugs=[ae.article.slug for ae in record.article_entities],
+    )

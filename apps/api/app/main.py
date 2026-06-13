@@ -20,7 +20,10 @@ from .models import (
     AuthUser,
     ChatRequest,
     ChatResponse,
+    Claim,
     ContributorOverview,
+    Entity,
+    EntityGraph,
     ReviewAssignment,
     ReviewDecision,
     ReviewDecisionCreate,
@@ -39,18 +42,22 @@ from .repository import (
     create_source_submission,
     delete_auth_session,
     get_article_by_slug,
+    get_claim_by_id,
+    get_claims_by_article,
     get_contributor_overview,
+    get_entity_graph,
     get_user_by_token,
     list_audit_logs,
     list_auth_sessions,
     list_article_suggestions,
     list_articles,
+    list_entities,
     list_review_queue,
     review_queue_overview,
     admin_revoke_session,
 )
-from .seed import seed_articles, seed_users
-from .services import build_chat_response, build_search_response, summarize_articles
+from .seed import seed_articles, seed_claims_and_entities, seed_users
+from .services import build_chat_response, build_jsonld_article, build_jsonld_export, build_search_response, summarize_articles
 
 
 @asynccontextmanager
@@ -59,13 +66,19 @@ async def lifespan(_: FastAPI):
     with SessionLocal() as session:
         seed_users(session)
         seed_articles(session)
+        seed_claims_and_entities(session)
     yield
 
 
 app = FastAPI(
     title=settings.app_name,
     version="0.1.0",
-    description="WikiAI MVP API with persisted articles, cited search results, and grounded article chat.",
+    description=(
+        "WikiAI epistemic database API. "
+        "The database is the product — articles, atomic claims, source citations, confidence scores, "
+        "knowledge graph entities, and JSON-LD export are all first-class API resources. "
+        "The website is one view into this data."
+    ),
     lifespan=lifespan,
 )
 
@@ -257,3 +270,53 @@ def submit_review_decision(
     if decision is None:
         raise HTTPException(status_code=404, detail="Queue item not found")
     return decision
+
+
+# --- Epistemic database endpoints ---
+
+
+@app.get("/api/v1/articles/{slug}/claims", response_model=list[Claim])
+def article_claims(slug: str, session: Session = Depends(get_session)) -> list[Claim]:
+    claims = get_claims_by_article(session, slug)
+    if claims is None:
+        raise HTTPException(status_code=404, detail="Article not found")
+    return claims
+
+
+@app.get("/api/v1/claims/{claim_id}", response_model=Claim)
+def claim_detail(claim_id: str, session: Session = Depends(get_session)) -> Claim:
+    claim = get_claim_by_id(session, claim_id)
+    if claim is None:
+        raise HTTPException(status_code=404, detail="Claim not found")
+    return claim
+
+
+@app.get("/api/v1/entities", response_model=list[Entity])
+def get_entities(session: Session = Depends(get_session)) -> list[Entity]:
+    return list_entities(session)
+
+
+@app.get("/api/v1/entities/{slug}", response_model=EntityGraph)
+def entity_graph(slug: str, session: Session = Depends(get_session)) -> EntityGraph:
+    graph = get_entity_graph(session, slug)
+    if graph is None:
+        raise HTTPException(status_code=404, detail="Entity not found")
+    return graph
+
+
+@app.get("/api/v1/articles/{slug}/jsonld")
+def article_jsonld(slug: str, session: Session = Depends(get_session)) -> dict:
+    article = get_article_by_slug(session, slug)
+    if article is None:
+        raise HTTPException(status_code=404, detail="Article not found")
+    return build_jsonld_article(article)
+
+
+@app.get("/api/v1/export")
+def export_knowledge(
+    format: str = Query(default="jsonld", pattern="^(jsonld)$"),
+    session: Session = Depends(get_session),
+) -> dict:
+    all_articles = list_articles(session)
+    all_entities = list_entities(session)
+    return build_jsonld_export(all_articles, all_entities)

@@ -2,6 +2,8 @@
 
 ## Architecture Summary
 
+WikiAI is a public epistemic database first, a website second. The canonical data model — entities, claims, citations, confidence scores — is the product. The Next.js frontend is one consumer of the API; external machines and researchers are equally first-class consumers.
+
 WikiAI should be built as a read-optimized, event-driven knowledge platform with explicit separation between canonical content, evidence, verification, and AI interaction layers.
 
 Recommended stack:
@@ -517,6 +519,60 @@ Mandatory review for:
 8. Search, vector, and cache indexes refresh.
 9. Monitoring is scheduled for new source changes.
 
+## Knowledge Graph and Machine-Readable API
+
+The epistemic database exposes knowledge as a graph of entities and typed relationships, not just prose articles. Key additions to the data model:
+
+### `entities`
+
+- `id`
+- `name`
+- `entity_type` (technology, field, concept, economy, institution, metric)
+- `canonical_slug`
+- `description`
+
+### `entity_relationships`
+
+- `id`
+- `subject_entity_id`
+- `predicate` (typed relationship: `is_application_of`, `threatens`, `uses`, `targets`, `measured_by`, `affects`)
+- `object_entity_id`
+- `confidence`
+- `source_claim_id` (claim that supports this relationship)
+
+### `article_entities`
+
+Junction table linking articles to the entities they cover.
+
+### `claims` (active in MVP)
+
+- `id`
+- `article_id`
+- `claim_text` (atomic, one verifiable statement)
+- `claim_type` (factual, historical, statistical, definitional, comparative)
+- `section_key`
+- `confidence`
+- `status` (active, disputed, deprecated)
+
+### `claim_citations`
+
+- `id`
+- `claim_id`
+- `source_id`
+- `evidence_span`
+- `support_type` (supports, contradicts, contextualizes)
+
+### Machine-Readable Endpoints (MVP)
+
+| Endpoint | Output |
+|----------|--------|
+| `GET /api/v1/articles/{slug}/claims` | Atomic claims for an article with per-claim confidence and citations |
+| `GET /api/v1/claims/{id}` | Single claim with full citation chain |
+| `GET /api/v1/entities` | All entities in the knowledge graph |
+| `GET /api/v1/entities/{slug}` | Entity + outgoing relationships + linked article slugs |
+| `GET /api/v1/articles/{slug}/jsonld` | Article as Schema.org JSON-LD |
+| `GET /api/v1/export?format=jsonld` | Full knowledge graph as JSON-LD `@graph` |
+
 ## Current MVP Interaction Layer
 
 - article pages expose authenticated forms for improvement suggestions and source submissions
@@ -526,6 +582,7 @@ Mandatory review for:
 - contributor dashboard exposes submission status scoped to the authenticated user
 - admin dashboard exposes aggregate counts and recent audit activity
 - admin dashboard exposes active session inspection and revocation
+- machine-readable API exposes claims, entities, relationships, and JSON-LD export without auth
 
 ## User Interface Wireframes
 

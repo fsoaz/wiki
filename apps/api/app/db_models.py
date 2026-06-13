@@ -39,6 +39,12 @@ class ArticleRecord(Base):
     source_submissions: Mapped[list["ArticleSourceSubmissionRecord"]] = relationship(
         back_populates="article", cascade="all, delete-orphan"
     )
+    claims: Mapped[list["ClaimRecord"]] = relationship(
+        back_populates="article", cascade="all, delete-orphan"
+    )
+    article_entities: Mapped[list["ArticleEntityRecord"]] = relationship(
+        back_populates="article", cascade="all, delete-orphan"
+    )
 
 
 class ArticleSectionRecord(Base):
@@ -203,3 +209,83 @@ class AuditLogRecord(Base):
     subject_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     details_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+
+
+class ClaimRecord(Base):
+    __tablename__ = "claims"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    article_id: Mapped[str] = mapped_column(ForeignKey("articles.id", ondelete="CASCADE"), index=True)
+    claim_text: Mapped[str] = mapped_column(Text)
+    claim_type: Mapped[str] = mapped_column(String(50))
+    section_key: Mapped[str] = mapped_column(String(255))
+    claim_hash: Mapped[str] = mapped_column(String(64), default="")
+    status: Mapped[str] = mapped_column(String(50), default="active")
+    confidence: Mapped[float] = mapped_column(Float, default=0.0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+
+    article: Mapped["ArticleRecord"] = relationship(back_populates="claims")
+    citations: Mapped[list["ClaimCitationRecord"]] = relationship(
+        back_populates="claim", cascade="all, delete-orphan"
+    )
+
+
+class ClaimCitationRecord(Base):
+    __tablename__ = "claim_citations"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    claim_id: Mapped[str] = mapped_column(ForeignKey("claims.id", ondelete="CASCADE"), index=True)
+    source_id: Mapped[str] = mapped_column(String(64), index=True)
+    evidence_span: Mapped[str] = mapped_column(Text, default="")
+    support_type: Mapped[str] = mapped_column(String(50), default="supports")
+
+    claim: Mapped["ClaimRecord"] = relationship(back_populates="citations")
+
+
+class EntityRecord(Base):
+    __tablename__ = "entities"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    name: Mapped[str] = mapped_column(String(255))
+    entity_type: Mapped[str] = mapped_column(String(50))
+    canonical_slug: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    description: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+
+    article_entities: Mapped[list["ArticleEntityRecord"]] = relationship(
+        back_populates="entity", cascade="all, delete-orphan"
+    )
+    outgoing_relationships: Mapped[list["EntityRelationshipRecord"]] = relationship(
+        back_populates="subject_entity",
+        foreign_keys="EntityRelationshipRecord.subject_entity_id",
+        cascade="all, delete-orphan",
+    )
+
+
+class EntityRelationshipRecord(Base):
+    __tablename__ = "entity_relationships"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    subject_entity_id: Mapped[str] = mapped_column(ForeignKey("entities.id", ondelete="CASCADE"), index=True)
+    predicate: Mapped[str] = mapped_column(String(100))
+    object_entity_id: Mapped[str] = mapped_column(ForeignKey("entities.id", ondelete="CASCADE"), index=True)
+    confidence: Mapped[float] = mapped_column(Float, default=1.0)
+    source_claim_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+
+    subject_entity: Mapped["EntityRecord"] = relationship(
+        back_populates="outgoing_relationships",
+        foreign_keys=[subject_entity_id],
+    )
+    object_entity: Mapped["EntityRecord"] = relationship(
+        foreign_keys=[object_entity_id],
+    )
+
+
+class ArticleEntityRecord(Base):
+    __tablename__ = "article_entities"
+
+    article_id: Mapped[str] = mapped_column(ForeignKey("articles.id", ondelete="CASCADE"), primary_key=True)
+    entity_id: Mapped[str] = mapped_column(ForeignKey("entities.id", ondelete="CASCADE"), primary_key=True)
+
+    article: Mapped["ArticleRecord"] = relationship(back_populates="article_entities")
+    entity: Mapped["EntityRecord"] = relationship(back_populates="article_entities")

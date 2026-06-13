@@ -25,11 +25,12 @@ The product must optimize for trust before engagement. AI should accelerate know
 
 ## Core Principles
 
-- `Verifiable`: every meaningful claim maps to supporting evidence.
-- `Transparent`: confidence, sources, and reasoning traces are visible.
+- `Database-first`: the epistemic database is the product. The website is one view into it. All knowledge is accessible via machine-readable API before it reaches any UI.
+- `Verifiable`: every meaningful claim is an atomic, addressable object mapped to supporting sources with evidence spans.
+- `Transparent`: confidence, sources, and reasoning traces are visible at both article and claim level.
 - `Continuously updated`: articles are monitored and re-verified over time.
 - `Human accountable`: experts and moderators remain in the approval loop.
-- `Structured`: articles are navigable, comparable, and machine-usable.
+- `Structured`: knowledge is a graph of entities and relationships, not a collection of prose documents.
 
 ## Primary Audience
 

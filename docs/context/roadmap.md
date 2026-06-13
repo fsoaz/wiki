@@ -4,65 +4,78 @@
 
 WikiAI should launch narrowly and credibly. The first milestone is not "cover everything"; it is "prove that AI-assisted knowledge can be trusted."
 
-## MVP Roadmap: 30 Days
+## MVP Roadmap: Shipped
 
-### Goals
+### Shipped
 
-- ship a read-first public product skeleton
-- prove citation-backed article experience
-- validate the first verification loop
-
-### Deliverables
-
-- homepage, article page, and AI search UX prototypes
+- homepage, article page, and AI search UX
 - article, revision, source, citation, and verification data model
-- source ingestion for a limited set of trusted publishers
-- claim extraction and basic confidence scoring
-- contributor suggestion workflow
-- reviewer approval queue
-- audit logging for content changes
+- contributor suggestion and source submission workflow
+- reviewer approval queue with filters, self-assignment, notes, and decision history
+- contributor dashboard and admin audit log
+- demo auth with role-based access (contributor, reviewer, admin)
+- admin session inspection and revocation
+
+### Shipped: epistemic database layer (2026-06-13)
+
+The core architectural shift: the database is the product, the website is one view into it.
+
+- atomic `claims` layer: each claim is an addressable object with `claim_type`, `status`, `confidence`, and citation chain
+- knowledge graph: `entities` with typed `entity_relationships` and `article_entities` linkage
+- machine-readable API endpoints: claims, claim detail, entity list, entity graph
+- JSON-LD export: per-article Schema.org and full `@graph` bulk export
+- `Database-first` established as first core principle in product spec
 
 ### Scope constraints
 
-- restrict domain coverage to a few high-trust areas
-- allow only English in the first release
-- keep auto-publication limited to low-risk updates
+- English only in first release
+- auto-publication limited to low-risk updates
+- claim extraction is seeded by hand; AI extraction pipeline is v1 scope
 
-### Success criteria
+### Success criteria (verified)
 
-- every published article shows citations, confidence, and last verification date
-- search answers include grounded evidence
-- reviewer flow works end to end for proposed updates
+- every published article exposes citations, confidence, and last verification date
+- every claim is addressable and returns its citation chain via API
+- knowledge graph is traversable via entity relationship endpoints
+- full knowledge graph is machine-exportable as JSON-LD
 
 ## Version 1 Roadmap: 90 Days
 
+### Epistemic database depth
+
+- AI claim extraction pipeline: automatically extract atomic claims from article section text
+- evidence span population: store exact quoted passage from source document in `claim_citations.evidence_span`
+- claim-level confidence computation: derive from source quality, cross-source agreement, freshness, and human review; persist to `confidence_metrics`
+- contradiction detection: when a claim is added or updated, check for conflicts with existing claims on the same topic
+- incoming entity relationship traversal in entity graph endpoint
+
 ### Product expansion
 
-- article timelines and related topic graph
+- article timelines
 - section-level article assistant
-- contributor dashboard and reputation system
+- contributor reputation system
 - expert verification onboarding
 - admin moderation console
 
 ### Verification expansion
 
-- contradiction detection
 - source freshness monitoring
 - automatic re-verification jobs
 - revision proposal generation from monitored source changes
 
 ### Platform expansion
 
-- hybrid search ranking improvements
-- vector retrieval at article-section and source-passage level
+- hybrid search with vector retrieval at article-section and source-passage level
 - analytics for trust, review throughput, and answer quality
 - model and prompt registry
+- `application/ld+json` content-type on JSON-LD endpoints
 
 ### Success criteria
 
+- every claim has a non-empty `evidence_span` linking to source text
+- confidence scores are computed, not hand-set
+- contradiction detection flags conflicting claims before publication
 - measurable confidence calibration against expert review
-- high-traffic topics re-verified on scheduled cadence
-- review SLAs enforced with queue prioritization
 
 ## Long-Term Roadmap: 12 Months
 
@@ -75,10 +88,10 @@ WikiAI should launch narrowly and credibly. The first milestone is not "cover ev
 
 ### Platform
 
-- structured knowledge graph APIs
+- SPARQL or GraphQL query interface over the knowledge graph
 - institution-facing tenant capabilities
 - broader source connector network
-- public trust and evidence APIs
+- public trust and evidence API with rate-limited open access
 
 ### AI and trust
 
