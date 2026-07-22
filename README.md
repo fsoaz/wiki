@@ -83,3 +83,5 @@ The frontend expects the API at `http://localhost:8000` by default.
 - `docs/context/`: product, architecture, and roadmap specifications.
 - `docs/standards/`: API, AI, testing, and documentation rules.
 - `docs/execution/`: task execution history and validation notes.
+
+---
