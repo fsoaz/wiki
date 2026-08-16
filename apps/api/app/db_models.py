@@ -192,7 +192,8 @@ class SessionTokenRecord(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    token: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     user: Mapped[UserRecord] = relationship(back_populates="sessions")
@@ -228,6 +229,13 @@ class ClaimRecord(Base):
     citations: Mapped[list["ClaimCitationRecord"]] = relationship(
         back_populates="claim", cascade="all, delete-orphan"
     )
+    contradictions: Mapped[list["ContradictionRecord"]] = relationship(
+        back_populates="claim", cascade="all, delete-orphan"
+    )
+    confidence_metrics: Mapped[list["ConfidenceMetricRecord"]] = relationship(
+        primaryjoin="and_(ClaimRecord.id == foreign(ConfidenceMetricRecord.subject_id), ConfidenceMetricRecord.subject_type == 'claim')",
+        viewonly=True,
+    )
 
 
 class ClaimCitationRecord(Base):
@@ -260,6 +268,10 @@ class EntityRecord(Base):
         foreign_keys="EntityRelationshipRecord.subject_entity_id",
         cascade="all, delete-orphan",
     )
+    incoming_relationships: Mapped[list["EntityRelationshipRecord"]] = relationship(
+        back_populates="object_entity",
+        foreign_keys="EntityRelationshipRecord.object_entity_id",
+    )
 
 
 class EntityRelationshipRecord(Base):
@@ -277,6 +289,7 @@ class EntityRelationshipRecord(Base):
         foreign_keys=[subject_entity_id],
     )
     object_entity: Mapped["EntityRecord"] = relationship(
+        back_populates="incoming_relationships",
         foreign_keys=[object_entity_id],
     )
 
@@ -289,3 +302,32 @@ class ArticleEntityRecord(Base):
 
     article: Mapped["ArticleRecord"] = relationship(back_populates="article_entities")
     entity: Mapped["EntityRecord"] = relationship(back_populates="article_entities")
+
+
+class ContradictionRecord(Base):
+    __tablename__ = "contradictions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    claim_id: Mapped[str] = mapped_column(ForeignKey("claims.id", ondelete="CASCADE"), index=True)
+    source_id: Mapped[str] = mapped_column(String(64), index=True)
+    contradiction_type: Mapped[str] = mapped_column(String(50))
+    severity: Mapped[str] = mapped_column(String(50))
+    details_json: Mapped[str] = mapped_column(Text, default="{}")
+    status: Mapped[str] = mapped_column(String(50), default="open")
+
+    claim: Mapped["ClaimRecord"] = relationship(back_populates="contradictions")
+
+
+class ConfidenceMetricRecord(Base):
+    __tablename__ = "confidence_metrics"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    subject_type: Mapped[str] = mapped_column(String(50), index=True)
+    subject_id: Mapped[str] = mapped_column(String(36), index=True)
+    overall_score: Mapped[float] = mapped_column(Float)
+    source_quality_score: Mapped[float] = mapped_column(Float)
+    cross_source_agreement_score: Mapped[float] = mapped_column(Float)
+    freshness_score: Mapped[float] = mapped_column(Float)
+    coverage_score: Mapped[float] = mapped_column(Float)
+    human_review_score: Mapped[float] = mapped_column(Float)
+    computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))

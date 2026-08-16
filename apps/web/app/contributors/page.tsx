@@ -1,7 +1,10 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { SiteHeader } from "@/components/site-header";
 import { Badge, Panel } from "@/components/ui";
 import { getAuthSession, getContributorOverview } from "@/lib/api";
+
+export const metadata: Metadata = { title: "Contributions" };
 
 export default async function ContributorsPage() {
   const user = await getAuthSession();

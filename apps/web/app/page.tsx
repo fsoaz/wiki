@@ -1,7 +1,10 @@
+import type { Metadata } from "next";
 import { ArrowRight, ShieldCheck, Sparkles, TimerReset } from "lucide-react";
 import { SiteHeader } from "@/components/site-header";
 import { Badge, ButtonLink, Panel } from "@/components/ui";
 import { getFeaturedArticles } from "@/lib/api";
+
+export const metadata: Metadata = { title: "Trusted encyclopedia" };
 
 export default async function HomePage() {
   const articles = await getFeaturedArticles();

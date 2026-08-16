@@ -1,8 +1,11 @@
+import type { Metadata } from "next";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { SiteHeader } from "@/components/site-header";
 import { Badge, Panel } from "@/components/ui";
 import { getAdminOverview, getAdminSessions, getAuthSession, revokeAdminSession } from "@/lib/api";
+
+export const metadata: Metadata = { title: "Administration" };
 
 export default async function AdminPage() {
   const user = await getAuthSession();

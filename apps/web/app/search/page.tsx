@@ -1,8 +1,10 @@
-import type { Route } from "next";
+import type { Metadata, Route } from "next";
 import Link from "next/link";
 import { SiteHeader } from "@/components/site-header";
 import { Badge, Panel } from "@/components/ui";
 import { searchKnowledge } from "@/lib/api";
+
+export const metadata: Metadata = { title: "Search" };
 
 export default async function SearchPage({
   searchParams

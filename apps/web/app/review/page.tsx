@@ -1,8 +1,11 @@
+import type { Metadata } from "next";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { SiteHeader } from "@/components/site-header";
 import { Badge, Panel } from "@/components/ui";
 import { assignReviewItem, getAuthSession, getReviewerOverview, submitReviewDecision } from "@/lib/api";
+
+export const metadata: Metadata = { title: "Review queue" };
 
 export default async function ReviewPage({
   searchParams

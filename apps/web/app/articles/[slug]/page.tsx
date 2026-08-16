@@ -1,13 +1,23 @@
+import type { Metadata } from "next";
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 import { SiteHeader } from "@/components/site-header";
 import { Badge, Panel } from "@/components/ui";
-import { getArticle, getAuthSession, submitArticleSource, submitArticleSuggestion } from "@/lib/api";
+import { getArticle, getArticleClaims, getAuthSession, submitArticleSource, submitArticleSuggestion } from "@/lib/api";
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params;
+  const article = await getArticle(slug);
+  return article ? { title: article.title, description: article.summary } : { title: "Article not found" };
+}
 
 export default async function ArticlePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const article = await getArticle(slug);
-  const user = await getAuthSession();
+  const [article, claims, user] = await Promise.all([
+    getArticle(slug),
+    getArticleClaims(slug),
+    getAuthSession()
+  ]);
 
   if (!article) {
     notFound();
@@ -92,6 +102,42 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
           </article>
           <aside className="space-y-5">
             <Panel className="p-5">
+              <div className="text-xs uppercase tracking-[0.22em] text-black/55">Trust breakdown</div>
+              <div className="mt-4 space-y-4">
+                {claims.length ? claims.map((claim) => (
+                  <div key={claim.id} className="rounded-2xl border border-black/10 bg-mist/80 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="text-sm leading-6 text-black/75">{claim.claim_text}</p>
+                      <Badge>{Math.round(claim.confidence * 100)}%</Badge>
+                    </div>
+                    {claim.confidence_metrics ? (
+                      <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs text-black/60">
+                        {[
+                          ["Source quality", claim.confidence_metrics.source_quality_score],
+                          ["Agreement", claim.confidence_metrics.cross_source_agreement_score],
+                          ["Freshness", claim.confidence_metrics.freshness_score],
+                          ["Coverage", claim.confidence_metrics.coverage_score],
+                          ["Human review", claim.confidence_metrics.human_review_score]
+                        ].map(([label, score]) => (
+                          <div key={String(label)}>
+                            <dt>{label}</dt>
+                            <dd className="font-semibold text-ink">{Math.round(Number(score) * 100)}%</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    ) : null}
+                    <div className="mt-3 text-xs font-medium text-black/60">
+                      {claim.contradictions.length
+                        ? `${claim.contradictions.length} open contradiction${claim.contradictions.length === 1 ? "" : "s"}`
+                        : "No contradictions detected"}
+                    </div>
+                  </div>
+                )) : (
+                  <p className="text-sm leading-6 text-black/65">Claim-level trust data is not available.</p>
+                )}
+              </div>
+            </Panel>
+            <Panel className="p-5">
               <div className="text-xs uppercase tracking-[0.22em] text-black/55">Related topics</div>
               <div className="mt-3 flex flex-wrap gap-2">
                 {article.related_topics.map((topic) => (
@@ -134,17 +180,20 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
                     <textarea
                       name="summary"
                       required
+                      maxLength={500}
                       placeholder="Describe the edit you want reviewed."
                       className="min-h-24 w-full rounded-2xl border border-black/10 bg-white/80 px-4 py-3 text-sm outline-none"
                     />
                     <textarea
                       name="proposed_text"
+                      maxLength={10000}
                       placeholder="Optional proposed wording"
                       className="min-h-24 w-full rounded-2xl border border-black/10 bg-white/80 px-4 py-3 text-sm outline-none"
                     />
                     <input
                       name="source_url"
                       type="url"
+                      maxLength={2048}
                       placeholder="Optional supporting source URL"
                       className="w-full rounded-2xl border border-black/10 bg-white/80 px-4 py-3 text-sm outline-none"
                     />
@@ -157,12 +206,14 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
                     <input
                       name="title"
                       required
+                      maxLength={255}
                       placeholder="Source title"
                       className="w-full rounded-2xl border border-black/10 bg-white/80 px-4 py-3 text-sm outline-none"
                     />
                     <input
                       name="publisher"
                       required
+                      maxLength={255}
                       placeholder="Publisher"
                       className="w-full rounded-2xl border border-black/10 bg-white/80 px-4 py-3 text-sm outline-none"
                     />
@@ -170,12 +221,14 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
                       name="url"
                       type="url"
                       required
+                      maxLength={2048}
                       placeholder="https://example.com/source"
                       className="w-full rounded-2xl border border-black/10 bg-white/80 px-4 py-3 text-sm outline-none"
                     />
                     <textarea
                       name="rationale"
                       required
+                      maxLength={2000}
                       placeholder="Why this source improves the article"
                       className="min-h-24 w-full rounded-2xl border border-black/10 bg-white/80 px-4 py-3 text-sm outline-none"
                     />

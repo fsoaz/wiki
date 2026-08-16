@@ -1,3 +1,7 @@
+import pytest
+from fastapi import HTTPException
+from pydantic import ValidationError
+
 from app.database import SessionLocal
 from app.main import (
     admin_audit_logs,
@@ -19,7 +23,7 @@ from app.main import (
     submit_article_source,
     submit_article_suggestion,
 )
-from app.models import ArticleSuggestionCreate, AuthLoginRequest, ReviewDecisionCreate, SourceSubmissionCreate
+from app.models import ArticleSuggestionCreate, AuthLoginRequest, ChatRequest, ReviewDecisionCreate, SourceSubmissionCreate
 from app.services import build_search_response
 
 
@@ -87,7 +91,7 @@ def test_submit_article_suggestion() -> None:
 def test_list_article_suggestions() -> None:
     session = SessionLocal()
     auth = login_user(session, "contributor@example.com")
-    submit_article_suggestion(
+    suggestion = submit_article_suggestion(
         "quantum-computing",
         ArticleSuggestionCreate(
             summary="Tighten wording in the overview section.",
@@ -95,9 +99,22 @@ def test_list_article_suggestions() -> None:
         session,
         auth.user,
     )
+    reviewer = login_user(session, "reviewer@example.com")
+    queue_item = next(
+        item
+        for item in review_queue("pending", None, session, reviewer.user)
+        if item.subject_id == suggestion.id
+    )
+    submit_review_decision(
+        queue_item.id,
+        ReviewDecisionCreate(decision="approved"),
+        session,
+        reviewer.user,
+    )
     payload = article_suggestions("quantum-computing", session)
     assert payload
     assert payload[0].article_slug == "quantum-computing"
+    assert not hasattr(payload[0], "contributor_email")
     session.close()
 
 
@@ -195,6 +212,62 @@ def test_submit_review_decision_updates_queue_and_subject() -> None:
     assert decision.decision == "approved"
     overview = reviewer_overview(None, None, session, reviewer.user)
     assert overview.approved_count >= 1
+    session.close()
+
+
+def test_review_decision_is_final() -> None:
+    session = SessionLocal()
+    contributor = login_user(session, "contributor@example.com")
+    submit_article_suggestion(
+        "quantum-computing",
+        ArticleSuggestionCreate(summary="Add a finality test."),
+        session,
+        contributor.user,
+    )
+    reviewer = login_user(session, "reviewer@example.com")
+    item = review_queue("pending", None, session, reviewer.user)[0]
+    submit_review_decision(
+        item.id,
+        ReviewDecisionCreate(decision="approved"),
+        session,
+        reviewer.user,
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        submit_review_decision(
+            item.id,
+            ReviewDecisionCreate(decision="rejected"),
+            session,
+            reviewer.user,
+        )
+
+    assert exc.value.status_code == 409
+    assert "already been decided" in exc.value.detail
+    session.close()
+
+
+@pytest.mark.parametrize("summary", ["", "   "])
+def test_suggestion_summary_rejects_blank_values(summary: str) -> None:
+    with pytest.raises(ValidationError):
+        ArticleSuggestionCreate(summary=summary)
+
+
+def test_submission_fields_have_maximum_lengths() -> None:
+    with pytest.raises(ValidationError):
+        ArticleSuggestionCreate(summary="x" * 501)
+    with pytest.raises(ValidationError):
+        SourceSubmissionCreate(title="x" * 256, publisher="Publisher", url="https://example.com", rationale="Useful")
+    with pytest.raises(ValidationError):
+        ChatRequest(question="x" * 2_001)
+
+
+@pytest.mark.parametrize("email", ["not-an-email", "missing@domain", "@example.com", ""])
+def test_login_rejects_malformed_email_without_querying(email: str) -> None:
+    session = SessionLocal()
+    with pytest.raises(HTTPException) as exc:
+        auth_login(AuthLoginRequest(email=email), session)
+    assert exc.value.status_code == 401
+    assert exc.value.detail == "Invalid credentials"
     session.close()
 
 

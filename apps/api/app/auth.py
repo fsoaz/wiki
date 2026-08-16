@@ -6,14 +6,19 @@ from .models import AuthUser
 from .repository import get_user_by_token
 
 
-def get_current_user(
-    authorization: str | None = Header(default=None),
-    session: Session = Depends(get_session),
-) -> AuthUser:
+def get_bearer_token(authorization: str | None = Header(default=None)) -> str:
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
-
     token = authorization.removeprefix("Bearer ").strip()
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
+    return token
+
+
+def get_current_user(
+    token: str = Depends(get_bearer_token),
+    session: Session = Depends(get_session),
+) -> AuthUser:
     user = get_user_by_token(session, token)
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session")

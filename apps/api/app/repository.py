@@ -1,8 +1,12 @@
 from collections.abc import Iterable
-from sqlalchemy import Select, or_, select
-from sqlalchemy.orm import Session, selectinload
-from uuid import uuid4
+from datetime import UTC, datetime, timedelta
+import hashlib
+import json
+import re
+import secrets
 
+from sqlalchemy import Select, delete, or_, select, update
+from sqlalchemy.orm import Session, selectinload
 from .db_models import (
     ArticleEntityRecord,
     AuditLogRecord,
@@ -19,6 +23,7 @@ from .db_models import (
     SessionTokenRecord,
     UserRecord,
 )
+from .config import settings
 from .models import (
     AdminOverview,
     Article,
@@ -32,6 +37,8 @@ from .models import (
     AuthSessionInfo,
     Claim,
     ClaimCitation,
+    ConfidenceMetrics,
+    Contradiction,
     ContributorOverview,
     Entity,
     EntityGraph,
@@ -46,6 +53,9 @@ from .models import (
     SourceSubmissionCreate,
     TimelineEvent,
 )
+
+
+_EMAIL_PATTERN = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 
 
 def hydrate_article(record: ArticleRecord) -> Article:
@@ -109,6 +119,7 @@ def get_article_by_slug(session: Session, slug: str) -> Article | None:
 
 def search_articles(session: Session, query: str) -> Iterable[Article]:
     normalized = query.lower().strip()
+    escaped = normalized.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     records = session.scalars(_article_query()).all()
 
     if not normalized:
@@ -117,9 +128,9 @@ def search_articles(session: Session, query: str) -> Iterable[Article]:
     filtered_records = session.scalars(
         _article_query().join(ArticleSectionRecord, ArticleSectionRecord.article_id == ArticleRecord.id).where(
             or_(
-                ArticleRecord.title.ilike(f"%{normalized}%"),
-                ArticleRecord.summary.ilike(f"%{normalized}%"),
-                ArticleSectionRecord.content.ilike(f"%{normalized}%"),
+                ArticleRecord.title.ilike(f"%{escaped}%", escape="\\"),
+                ArticleRecord.summary.ilike(f"%{escaped}%", escape="\\"),
+                ArticleSectionRecord.content.ilike(f"%{escaped}%", escape="\\"),
             )
         )
     ).unique().all()
@@ -199,7 +210,7 @@ def create_article_suggestion(
             action="article.suggestion.created",
             subject_type="article_suggestion",
             subject_id=record.id,
-            details_json=f'{{"article_slug":"{article.slug}"}}',
+            details_json=json.dumps({"article_slug": article.slug}),
         )
     )
     session.commit()
@@ -226,7 +237,10 @@ def list_article_suggestions(session: Session, article_slug: str) -> list[Articl
 
     records = session.scalars(
         select(ArticleSuggestionRecord)
-        .where(ArticleSuggestionRecord.article_id == article.id)
+        .where(
+            ArticleSuggestionRecord.article_id == article.id,
+            ArticleSuggestionRecord.status == "approved",
+        )
         .order_by(ArticleSuggestionRecord.created_at.desc())
     ).all()
 
@@ -282,7 +296,7 @@ def create_source_submission(
             action="article.source_submission.created",
             subject_type="article_source_submission",
             subject_id=record.id,
-            details_json=f'{{"article_slug":"{article.slug}"}}',
+            details_json=json.dumps({"article_slug": article.slug}),
         )
     )
     session.commit()
@@ -364,11 +378,30 @@ def get_user_by_email(session: Session, email: str) -> AuthUser | None:
 
 
 def create_auth_session(session: Session, payload: AuthLoginRequest) -> AuthSession | None:
+    if not _EMAIL_PATTERN.fullmatch(payload.email):
+        return None
     record = session.scalars(select(UserRecord).where(UserRecord.email == payload.email, UserRecord.status == "active")).first()
     if record is None:
         return None
 
-    token_record = SessionTokenRecord(user_id=record.id, token=f"wikiai_{uuid4().hex}")
+    now = datetime.now(UTC)
+    session.execute(delete(SessionTokenRecord).where(SessionTokenRecord.expires_at <= now))
+    existing_sessions = session.scalars(
+        select(SessionTokenRecord)
+        .where(SessionTokenRecord.user_id == record.id)
+        .order_by(SessionTokenRecord.created_at.asc())
+    ).all()
+    sessions_to_remove = max(0, len(existing_sessions) - settings.max_sessions_per_user + 1)
+    for stale_session in existing_sessions[:sessions_to_remove]:
+        session.delete(stale_session)
+
+    raw_token = f"wikiai_{secrets.token_urlsafe(32)}"
+    expires_at = now + timedelta(hours=settings.session_ttl_hours)
+    token_record = SessionTokenRecord(
+        user_id=record.id,
+        token_hash=_hash_token(raw_token),
+        expires_at=expires_at,
+    )
     session.add(token_record)
     session.flush()
     session.add(
@@ -378,20 +411,30 @@ def create_auth_session(session: Session, payload: AuthLoginRequest) -> AuthSess
             action="auth.login",
             subject_type="auth_session",
             subject_id=token_record.id,
-            details_json=f'{{"email":"{record.email}"}}',
+            details_json=json.dumps({"email": record.email}),
         )
     )
     session.commit()
     session.refresh(token_record)
     return AuthSession(
-        token=token_record.token,
+        token=raw_token,
+        expires_at=expires_at.isoformat(),
         user=AuthUser(id=record.id, email=record.email, display_name=record.display_name, role=record.role),
     )
 
 
+def _hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
 def get_user_by_token(session: Session, token: str) -> AuthUser | None:
     record = session.scalars(
-        select(UserRecord).join(SessionTokenRecord, SessionTokenRecord.user_id == UserRecord.id).where(SessionTokenRecord.token == token)
+        select(UserRecord)
+        .join(SessionTokenRecord, SessionTokenRecord.user_id == UserRecord.id)
+        .where(
+            SessionTokenRecord.token_hash == _hash_token(token),
+            SessionTokenRecord.expires_at > datetime.now(UTC),
+        )
     ).first()
     if record is None:
         return None
@@ -399,7 +442,9 @@ def get_user_by_token(session: Session, token: str) -> AuthUser | None:
 
 
 def delete_auth_session(session: Session, token: str) -> bool:
-    record = session.scalars(select(SessionTokenRecord).where(SessionTokenRecord.token == token)).first()
+    record = session.scalars(
+        select(SessionTokenRecord).where(SessionTokenRecord.token_hash == _hash_token(token))
+    ).first()
     if record is None:
         return False
     user = record.user
@@ -509,7 +554,29 @@ def create_review_decision(
     if queue_item is None:
         return None
 
-    queue_item.status = payload.decision
+    contributor_email = _review_subject_contributor_email(session, queue_item)
+    if contributor_email == user.email:
+        raise PermissionError("Reviewers cannot decide on their own submissions")
+    if queue_item.assigned_reviewer_email not in (None, user.email):
+        raise ValueError("Queue item is assigned to another reviewer")
+
+    result = session.execute(
+        update(ReviewQueueItemRecord)
+        .where(
+            ReviewQueueItemRecord.id == queue_item_id,
+            ReviewQueueItemRecord.status == "pending",
+            or_(
+                ReviewQueueItemRecord.assigned_reviewer_email.is_(None),
+                ReviewQueueItemRecord.assigned_reviewer_email == user.email,
+            ),
+        )
+        .values(status=payload.decision, assigned_reviewer_email=user.email)
+    )
+    if result.rowcount != 1:
+        session.rollback()
+        raise ValueError("Queue item is assigned to another reviewer or has already been decided")
+
+    session.refresh(queue_item)
     queue_item.assigned_reviewer_email = user.email
 
     if queue_item.subject_type == "suggestion":
@@ -535,7 +602,7 @@ def create_review_decision(
             action="review.decision.created",
             subject_type="review_queue_item",
             subject_id=queue_item.id,
-            details_json=f'{{"decision":"{payload.decision}"}}',
+            details_json=json.dumps({"decision": payload.decision}),
         )
     )
     session.commit()
@@ -558,7 +625,22 @@ def assign_review_queue_item(
     if queue_item is None:
         return None
 
-    queue_item.assigned_reviewer_email = user.email
+    result = session.execute(
+        update(ReviewQueueItemRecord)
+        .where(
+            ReviewQueueItemRecord.id == queue_item_id,
+            ReviewQueueItemRecord.status == "pending",
+            or_(
+                ReviewQueueItemRecord.assigned_reviewer_email.is_(None),
+                ReviewQueueItemRecord.assigned_reviewer_email == user.email,
+            ),
+        )
+        .values(assigned_reviewer_email=user.email)
+    )
+    if result.rowcount != 1:
+        session.rollback()
+        raise ValueError("Queue item is already assigned or decided")
+    session.refresh(queue_item)
     session.add(
         AuditLogRecord(
             actor_email=user.email,
@@ -566,7 +648,7 @@ def assign_review_queue_item(
             action="review.assignment.created",
             subject_type="review_queue_item",
             subject_id=queue_item.id,
-            details_json=f'{{"assigned_reviewer_email":"{user.email}"}}',
+            details_json=json.dumps({"assigned_reviewer_email": user.email}),
         )
     )
     session.commit()
@@ -577,6 +659,18 @@ def assign_review_queue_item(
         assigned_reviewer_email=user.email,
         status=queue_item.status,
     )
+
+
+def _review_subject_contributor_email(
+    session: Session, queue_item: ReviewQueueItemRecord
+) -> str | None:
+    if queue_item.subject_type == "suggestion":
+        subject = session.get(ArticleSuggestionRecord, queue_item.subject_id)
+    elif queue_item.subject_type == "source_submission":
+        subject = session.get(ArticleSourceSubmissionRecord, queue_item.subject_id)
+    else:
+        subject = None
+    return subject.contributor_email if subject is not None else None
 
 
 def list_audit_logs(session: Session, limit: int = 50, action: str | None = None) -> list[AuditLogEntry]:
@@ -605,7 +699,9 @@ def get_admin_overview(session: Session) -> AdminOverview:
     return AdminOverview(
         audit_event_count=session.query(AuditLogRecord).count(),
         review_queue_count=session.query(ReviewQueueItemRecord).count(),
-        active_session_count=session.query(SessionTokenRecord).count(),
+        active_session_count=session.query(SessionTokenRecord)
+        .filter(SessionTokenRecord.expires_at > datetime.now(UTC))
+        .count(),
         recent_audit_entries=recent,
     )
 
@@ -615,6 +711,7 @@ def list_auth_sessions(session: Session, limit: int = 100) -> list[AuthSessionIn
         select(SessionTokenRecord)
         .join(UserRecord, SessionTokenRecord.user_id == UserRecord.id)
         .options(selectinload(SessionTokenRecord.user))
+        .where(SessionTokenRecord.expires_at > datetime.now(UTC))
         .order_by(SessionTokenRecord.created_at.desc())
         .limit(limit)
     ).all()
@@ -623,6 +720,7 @@ def list_auth_sessions(session: Session, limit: int = 100) -> list[AuthSessionIn
             id=record.id,
             user_email=record.user.email,
             user_role=record.user.role,
+            expires_at=record.expires_at.isoformat(),
             created_at=record.created_at.isoformat(),
         )
         for record in records
@@ -641,7 +739,9 @@ def admin_revoke_session(session: Session, session_id: str, user: AuthUser) -> b
             action="admin.session.revoked",
             subject_type="auth_session",
             subject_id=record.id,
-            details_json=f'{{"revoked_user_email":"{target_user.email if target_user else ""}"}}',
+            details_json=json.dumps(
+                {"revoked_user_email": target_user.email if target_user else ""}
+            ),
         )
     )
     session.delete(record)
@@ -650,6 +750,9 @@ def admin_revoke_session(session: Session, session_id: str, user: AuthUser) -> b
 
 
 def _hydrate_claim(article_slug: str, record: ClaimRecord) -> Claim:
+    metrics_record = None
+    if record.confidence_metrics:
+        metrics_record = max(record.confidence_metrics, key=lambda m: m.computed_at)
     return Claim(
         id=record.id,
         article_slug=article_slug,
@@ -667,6 +770,34 @@ def _hydrate_claim(article_slug: str, record: ClaimRecord) -> Claim:
             )
             for c in record.citations
         ],
+        confidence_metrics=(
+            ConfidenceMetrics(
+                id=metrics_record.id,
+                subject_type=metrics_record.subject_type,
+                subject_id=metrics_record.subject_id,
+                overall_score=metrics_record.overall_score,
+                source_quality_score=metrics_record.source_quality_score,
+                cross_source_agreement_score=metrics_record.cross_source_agreement_score,
+                freshness_score=metrics_record.freshness_score,
+                coverage_score=metrics_record.coverage_score,
+                human_review_score=metrics_record.human_review_score,
+                computed_at=metrics_record.computed_at.isoformat(),
+            )
+            if metrics_record
+            else None
+        ),
+        contradictions=[
+            Contradiction(
+                id=c.id,
+                claim_id=c.claim_id,
+                source_id=c.source_id,
+                contradiction_type=c.contradiction_type,
+                severity=c.severity,
+                details_json=c.details_json,
+                status=c.status,
+            )
+            for c in record.contradictions
+        ],
     )
 
 
@@ -676,7 +807,11 @@ def get_claims_by_article(session: Session, article_slug: str) -> list[Claim] | 
         return None
     records = session.scalars(
         select(ClaimRecord)
-        .options(selectinload(ClaimRecord.citations))
+        .options(
+            selectinload(ClaimRecord.citations),
+            selectinload(ClaimRecord.contradictions),
+            selectinload(ClaimRecord.confidence_metrics),
+        )
         .where(ClaimRecord.article_id == article.id)
         .order_by(ClaimRecord.created_at.asc())
     ).all()
@@ -686,7 +821,11 @@ def get_claims_by_article(session: Session, article_slug: str) -> list[Claim] | 
 def get_claim_by_id(session: Session, claim_id: str) -> Claim | None:
     record = session.scalars(
         select(ClaimRecord)
-        .options(selectinload(ClaimRecord.citations))
+        .options(
+            selectinload(ClaimRecord.citations),
+            selectinload(ClaimRecord.contradictions),
+            selectinload(ClaimRecord.confidence_metrics),
+        )
         .where(ClaimRecord.id == claim_id)
     ).first()
     if record is None:
@@ -716,12 +855,39 @@ def get_entity_graph(session: Session, slug: str) -> EntityGraph | None:
             selectinload(EntityRecord.outgoing_relationships).selectinload(
                 EntityRelationshipRecord.object_entity
             ),
+            selectinload(EntityRecord.incoming_relationships).selectinload(
+                EntityRelationshipRecord.subject_entity
+            ),
             selectinload(EntityRecord.article_entities).selectinload(ArticleEntityRecord.article),
         )
         .where(EntityRecord.canonical_slug == slug)
     ).first()
     if record is None:
         return None
+    outgoing = [
+        EntityRelationship(
+            id=rel.id,
+            subject_slug=record.canonical_slug,
+            subject_name=record.name,
+            predicate=rel.predicate,
+            object_slug=rel.object_entity.canonical_slug,
+            object_name=rel.object_entity.name,
+            confidence=rel.confidence,
+        )
+        for rel in record.outgoing_relationships
+    ]
+    incoming = [
+        EntityRelationship(
+            id=rel.id,
+            subject_slug=rel.subject_entity.canonical_slug,
+            subject_name=rel.subject_entity.name,
+            predicate=rel.predicate,
+            object_slug=record.canonical_slug,
+            object_name=record.name,
+            confidence=rel.confidence,
+        )
+        for rel in record.incoming_relationships
+    ]
     return EntityGraph(
         entity=Entity(
             id=record.id,
@@ -730,17 +896,6 @@ def get_entity_graph(session: Session, slug: str) -> EntityGraph | None:
             canonical_slug=record.canonical_slug,
             description=record.description,
         ),
-        relationships=[
-            EntityRelationship(
-                id=rel.id,
-                subject_slug=record.canonical_slug,
-                subject_name=record.name,
-                predicate=rel.predicate,
-                object_slug=rel.object_entity.canonical_slug,
-                object_name=rel.object_entity.name,
-                confidence=rel.confidence,
-            )
-            for rel in record.outgoing_relationships
-        ],
+        relationships=outgoing + incoming,
         article_slugs=[ae.article.slug for ae in record.article_entities],
     )

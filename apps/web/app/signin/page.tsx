@@ -1,7 +1,11 @@
+import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { SiteHeader } from "@/components/site-header";
 import { Panel } from "@/components/ui";
+import { safeNextPath } from "@/lib/navigation";
+
+export const metadata: Metadata = { title: "Sign in" };
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -9,7 +13,7 @@ async function signIn(formData: FormData) {
   "use server";
 
   const email = String(formData.get("email") ?? "");
-  const nextPath = String(formData.get("next") ?? "/");
+  const nextPath = safeNextPath(String(formData.get("next") ?? "/"));
   const response = await fetch(`${API_URL}/api/v1/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -21,15 +25,33 @@ async function signIn(formData: FormData) {
     redirect("/signin?error=1");
   }
 
-  const payload = (await response.json()) as { token: string };
+  const payload = (await response.json()) as { token: string; expires_at: string };
   const cookieStore = await cookies();
-  cookieStore.set("wikiai_token", payload.token, { httpOnly: true, sameSite: "lax", path: "/" });
+  cookieStore.set("wikiai_token", payload.token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    expires: new Date(payload.expires_at)
+  });
   redirect(nextPath);
 }
 
 async function signOut() {
   "use server";
   const cookieStore = await cookies();
+  const token = cookieStore.get("wikiai_token")?.value;
+  if (token) {
+    try {
+      await fetch(`${API_URL}/api/v1/auth/logout`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store"
+      });
+    } catch {
+      // Clearing the browser cookie is still required if the API is unavailable.
+    }
+  }
   cookieStore.delete("wikiai_token");
   redirect("/");
 }
@@ -40,6 +62,7 @@ export default async function SignInPage({
   searchParams: Promise<{ next?: string; error?: string }>;
 }) {
   const { next = "/", error } = await searchParams;
+  const nextPath = safeNextPath(next);
 
   return (
     <main className="min-h-screen pb-16">
@@ -64,7 +87,7 @@ export default async function SignInPage({
               <div className="mt-3 text-sm leading-6 text-black/72">{description}</div>
               <form action={signIn} className="mt-6">
                 <input type="hidden" name="email" value={email} />
-                <input type="hidden" name="next" value={next} />
+                <input type="hidden" name="next" value={nextPath} />
                 <button className="rounded-full bg-ink px-5 py-3 text-sm font-semibold text-white" type="submit">
                   Continue as {label}
                 </button>

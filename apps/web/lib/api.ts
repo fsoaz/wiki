@@ -6,6 +6,7 @@ import type {
   ArticleChatResponse,
   AuthSessionInfo,
   AuthUser,
+  Claim,
   ContributorOverview,
   ReviewAssignment,
   ReviewerOverview,
@@ -65,6 +66,10 @@ export async function getFeaturedArticles(): Promise<Article[]> {
 export async function getArticle(slug: string): Promise<Article | null> {
   const data = await safeFetch<Article>(`/api/v1/articles/${slug}`);
   return data ?? fallbackArticles.find((article) => article.slug === slug) ?? null;
+}
+
+export async function getArticleClaims(slug: string): Promise<Claim[]> {
+  return (await safeFetch<Claim[]>(`/api/v1/articles/${slug}/claims`)) ?? [];
 }
 
 export async function searchKnowledge(query: string): Promise<SearchResult> {

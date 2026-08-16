@@ -2,7 +2,10 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "WikiAI MVP",
+  title: {
+    default: "WikiAI",
+    template: "%s | WikiAI"
+  },
   description: "A trust-centric AI-powered encyclopedia MVP."
 };
 

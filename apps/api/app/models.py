@@ -1,7 +1,7 @@
 from datetime import date
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 
 Tier = Literal["A", "B", "C", "D"]
@@ -53,7 +53,14 @@ class SearchResponse(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    question: str
+    question: str = Field(min_length=1, max_length=2_000)
+
+    @field_validator("question")
+    @classmethod
+    def question_must_have_content(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("question must not be blank")
+        return value.strip()
 
 
 class ChatResponse(BaseModel):
@@ -65,9 +72,16 @@ class ChatResponse(BaseModel):
 
 class ArticleSuggestionCreate(BaseModel):
     suggestion_type: Literal["edit", "source", "outdated", "correction"] = "edit"
-    summary: str
-    proposed_text: str | None = None
-    source_url: str | None = None
+    summary: str = Field(min_length=1, max_length=500)
+    proposed_text: str | None = Field(default=None, max_length=10_000)
+    source_url: str | None = Field(default=None, max_length=2_048)
+
+    @field_validator("summary")
+    @classmethod
+    def summary_must_have_content(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("summary must not be blank")
+        return value.strip()
 
 
 class ArticleSuggestion(BaseModel):
@@ -83,11 +97,30 @@ class ArticleSuggestion(BaseModel):
     created_at: str
 
 
+class PublicArticleSuggestion(BaseModel):
+    id: str
+    article_slug: str
+    contributor_name: str
+    suggestion_type: str
+    summary: str
+    proposed_text: str | None = None
+    source_url: str | None = None
+    status: str
+    created_at: str
+
+
 class SourceSubmissionCreate(BaseModel):
-    title: str
-    publisher: str
-    url: str
-    rationale: str
+    title: str = Field(min_length=1, max_length=255)
+    publisher: str = Field(min_length=1, max_length=255)
+    url: str = Field(min_length=1, max_length=2_048)
+    rationale: str = Field(min_length=1, max_length=2_000)
+
+    @field_validator("title", "publisher", "url", "rationale")
+    @classmethod
+    def fields_must_have_content(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("field must not be blank")
+        return value.strip()
 
 
 class SourceSubmission(BaseModel):
@@ -129,7 +162,7 @@ class ReviewQueueItem(BaseModel):
 
 class ReviewDecisionCreate(BaseModel):
     decision: Literal["approved", "rejected"]
-    notes: str | None = None
+    notes: str | None = Field(default=None, max_length=2_000)
 
 
 class ReviewDecision(BaseModel):
@@ -165,11 +198,17 @@ class AuthUser(BaseModel):
 
 
 class AuthLoginRequest(BaseModel):
-    email: str
+    email: str = Field(max_length=254)
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        return value.strip().lower()
 
 
 class AuthSession(BaseModel):
     token: str
+    expires_at: str
     user: AuthUser
 
 
@@ -195,6 +234,7 @@ class AuthSessionInfo(BaseModel):
     id: str
     user_email: str
     user_role: str
+    expires_at: str
     created_at: str
 
 
@@ -203,6 +243,29 @@ class ClaimCitation(BaseModel):
     source_id: str
     evidence_span: str
     support_type: str
+
+
+class ConfidenceMetrics(BaseModel):
+    id: str
+    subject_type: str
+    subject_id: str
+    overall_score: float
+    source_quality_score: float
+    cross_source_agreement_score: float
+    freshness_score: float
+    coverage_score: float
+    human_review_score: float
+    computed_at: str
+
+
+class Contradiction(BaseModel):
+    id: str
+    claim_id: str
+    source_id: str
+    contradiction_type: str
+    severity: str
+    details_json: str
+    status: str
 
 
 class Claim(BaseModel):
@@ -214,6 +277,8 @@ class Claim(BaseModel):
     status: str
     confidence: float
     citations: list[ClaimCitation] = []
+    confidence_metrics: ConfidenceMetrics | None = None
+    contradictions: list[Contradiction] = []
 
 
 class Entity(BaseModel):

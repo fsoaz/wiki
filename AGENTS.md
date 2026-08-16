@@ -1,17 +1,22 @@
 # Repository Guidelines
 
-## Project Structure & Module Organization
+`WikiAI` is a small monorepo. Human documentation starts at [docs/README.md](docs/README.md). Do not duplicate getting-started steps here.
 
-`WikiAI` is a small monorepo with two apps:
+## Project Structure & Module Organization
 
 - `apps/web`: Next.js frontend under `app/`, shared UI in `components/`, and client helpers in `lib/`.
 - `apps/api`: FastAPI service with application code in `app/` and tests in `tests/`.
 - `infra/sql/001_init.sql`: bootstrap PostgreSQL schema.
-- `docs/context`, `docs/standards`, `docs/execution`: product specs, engineering rules, and execution notes.
+- `docs/tutorials`, `docs/how-to`, `docs/reference`, `docs/explanation`: public developer docs (Diátaxis).
+- `docs/standards`: engineering rules for APIs, AI, testing, and writing.
+- `docs/execution`: session working notes, not a product contract.
+- `docs/context`: stubs that point at `docs/explanation/`.
 
-Keep changes scoped to the app you are touching. Put cross-cutting product or process updates in `docs/`.
+Keep changes scoped to the app you are touching. Put cross-cutting product or process updates in `docs/`. When code changes, update the matching docs in the same change.
 
 ## Build, Test, and Development Commands
+
+For the full onboarding path, use [docs/tutorials/getting-started.md](docs/tutorials/getting-started.md).
 
 - `npm install`: install root workspace dependencies.
 - `npm run dev:web`: start the frontend at `http://localhost:3000`.
@@ -22,11 +27,11 @@ Keep changes scoped to the app you are touching. Put cross-cutting product or pr
 - `cd apps/api && uv run pytest`: run the API test suite.
 - `docker compose up postgres`: start local PostgreSQL when testing against the SQL schema.
 
-Set `WIKIAI_DATABASE_URL` to switch the API from default SQLite to PostgreSQL.
+Set `WIKIAI_DATABASE_URL` to switch the API from default SQLite to PostgreSQL. Variable names: [docs/reference/configuration.md](docs/reference/configuration.md).
 
 ## Coding Style & Naming Conventions
 
-Use clear operational English in docs and keep headings behavior-oriented. In code, follow the existing style:
+Use clear operational English in docs and keep headings behavior-oriented. Follow [docs/standards/conventions.md](docs/standards/conventions.md). In code, follow the existing style:
 
 - TypeScript/React: 2-space indentation, `PascalCase` components, `camelCase` helpers, route files inside `app/**/page.tsx`.
 - Python: PEP 8, 4-space indentation, `snake_case` modules and functions.
@@ -44,4 +49,4 @@ There is no dedicated frontend test suite yet, so at minimum run `npm run lint:w
 
 Current history uses short, imperative commit subjects, for example `Build WikiAI MVP scaffold`. Follow that pattern and keep each commit focused.
 
-Pull requests should include a brief summary, affected areas (`apps/web`, `apps/api`, `infra`, `docs`), local test commands run, and screenshots for visible UI changes. Link the related task or issue when available.
+Pull requests should include a brief summary, affected areas (`apps/web`, `apps/api`, `infra`, `docs`), local test commands run, and screenshots for visible UI changes. Link the related task or issue when available. User-facing API or workflow changes also need a [CHANGELOG.md](CHANGELOG.md) entry.

@@ -17,6 +17,7 @@ from .db_models import (
     SourceRecord,
     UserRecord,
 )
+from .trust import detect_and_store_contradictions, evidence_span_from_section, persist_claim_confidence
 
 
 def seed_articles(session: Session) -> None:
@@ -100,21 +101,18 @@ _CLAIMS_SEED: dict[str, list[dict]] = {
             "claim_text": "Quantum computers represent information with qubits rather than bits.",
             "claim_type": "factual",
             "section_key": "overview",
-            "confidence": 0.95,
             "source_ids": ["src-nist", "src-ibm"],
         },
         {
             "claim_text": "A qubit can be prepared in a superposition, and quantum algorithms exploit interference patterns to amplify useful outcomes.",
             "claim_type": "factual",
             "section_key": "overview",
-            "confidence": 0.95,
             "source_ids": ["src-nist"],
         },
         {
             "claim_text": "Useful quantum computation remains limited by decoherence, gate fidelity, error-correction overhead, and the difficulty of scaling hardware.",
             "claim_type": "factual",
             "section_key": "practical-constraints",
-            "confidence": 0.92,
             "source_ids": ["src-nature", "src-nist"],
         },
     ],
@@ -123,21 +121,18 @@ _CLAIMS_SEED: dict[str, list[dict]] = {
             "claim_text": "Brazil experienced prolonged inflation instability before the Real Plan.",
             "claim_type": "historical",
             "section_key": "historical-context",
-            "confidence": 0.95,
             "source_ids": ["src-bcb", "src-imf"],
         },
         {
             "claim_text": "Inflation-targeting frameworks improved price stability in Brazil.",
             "claim_type": "factual",
             "section_key": "historical-context",
-            "confidence": 0.88,
             "source_ids": ["src-bcb"],
         },
         {
             "claim_text": "Recent inflation trends often reflect food and energy prices, administered price changes, currency effects, and domestic policy choices.",
             "claim_type": "factual",
             "section_key": "current-drivers",
-            "confidence": 0.85,
             "source_ids": ["src-bcb", "src-worldbank"],
         },
     ],
@@ -208,6 +203,9 @@ def seed_claims_and_entities(session: Session) -> None:
             if entity_id:
                 session.add(ArticleEntityRecord(article_id=article.id, entity_id=entity_id))
 
+        section_by_key = {
+            section.heading.lower().replace(" ", "-"): section.content for section in article.sections
+        }
         for claim_data in _CLAIMS_SEED.get(article_slug, []):
             claim = ClaimRecord(
                 article_id=article.id,
@@ -215,11 +213,25 @@ def seed_claims_and_entities(session: Session) -> None:
                 claim_type=claim_data["claim_type"],
                 section_key=claim_data["section_key"],
                 status="active",
-                confidence=claim_data["confidence"],
+                confidence=0.0,
             )
             session.add(claim)
             session.flush()
+            span = evidence_span_from_section(
+                claim_data["claim_text"],
+                section_by_key.get(claim_data["section_key"], ""),
+            )
             for source_id in claim_data["source_ids"]:
-                session.add(ClaimCitationRecord(claim_id=claim.id, source_id=source_id, support_type="supports"))
+                session.add(
+                    ClaimCitationRecord(
+                        claim_id=claim.id,
+                        source_id=source_id,
+                        evidence_span=span,
+                        support_type="supports",
+                    )
+                )
+            session.flush()
+            persist_claim_confidence(session, claim, article)
+            detect_and_store_contradictions(session, claim)
 
     session.commit()

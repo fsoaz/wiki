@@ -1,46 +1,23 @@
 # WikiAI
 
-WikiAI is an AI-powered encyclopedia MVP focused on transparent, evidence-backed knowledge.
+WikiAI is an AI-powered encyclopedia MVP. The product is a public [epistemic database](docs/glossary.md#epistemic-database): machine-readable articles, [claims](docs/glossary.md#claim), citations, and trust metadata. The website is one view into that database.
 
-## Status
+This repository is a working MVP, not a production `v1`. Demo auth, SQLite-by-default storage, and seeded content are intentional. See [what the MVP ships](docs/reference/current-mvp.md) and the [target architecture](docs/explanation/architecture.md).
 
-This repository currently contains a functional MVP scaffold.
+## Prerequisites
 
-- It is a real working MVP with frontend, backend, persistence, auth, contributor flows, reviewer flows, and admin/audit surfaces.
-- It is not yet a production-ready `v1`.
-- Core gaps still include production identity, search/indexing infrastructure, source-ingestion automation, verification agents, migrations, and operational hardening.
+- Node.js 18.18 or newer (Next.js 15)
+- Python 3.12 or newer
+- [uv](https://docs.astral.sh/uv/) for API dependencies
+- Docker, only if you run PostgreSQL instead of the default SQLite file
 
-## Applications
+## Install and run
 
-- `apps/web`: `Next.js` frontend for homepage, article reading, and AI search.
-- `apps/api`: `FastAPI` backend with seeded article, search, and article-chat endpoints.
-- `infra/sql/001_init.sql`: PostgreSQL schema for the platform data model.
-- `docker-compose.yml`: local PostgreSQL service.
-
-## MVP Features
-
-- canonical article read experience
-- grounded search results with citations
-- article trust metadata: confidence, verification date, source list
-- seeded article assistant endpoint
-- PostgreSQL schema aligned with the product blueprint
-- token-backed demo auth with contributor, reviewer, and admin roles
-- contributor submission forms directly on article pages
-- reviewer queue dashboard with approve/reject actions
-- reviewer queue filters, self-assignment, and decision notes/history
-- admin dashboard with recent audit events and workflow visibility
-- admin session inspection and revocation for seeded demo accounts
-
-## Run The MVP
-
-### Frontend
+From the repository root, install the frontend workspace, then start the API and the web app.
 
 ```bash
 npm install
-npm run dev:web
 ```
-
-### API
 
 ```bash
 cd apps/api
@@ -48,40 +25,44 @@ uv sync
 uv run uvicorn app.main:app --reload
 ```
 
-Set `WIKIAI_DATABASE_URL` if you want PostgreSQL instead of the default local SQLite file:
+The API listens on `http://localhost:8000` and creates a local SQLite file at `apps/api/wikiai.db` on first start.
+
+In a second terminal:
 
 ```bash
-export WIKIAI_DATABASE_URL=postgresql+psycopg://wikiai:wikiai@localhost:5432/wikiai
+npm run dev:web
 ```
 
-Demo auth accounts:
+The frontend listens on `http://localhost:3000` and calls `http://localhost:8000` by default.
+
+> **Note:** Postgres is optional. The default local database is SQLite. To use PostgreSQL, follow [Use PostgreSQL locally](docs/how-to/use-postgres.md).
+
+## Verify
+
+1. `curl -s http://localhost:8000/health` returns `{"status":"ok","environment":"development"}`.
+2. Open `http://localhost:3000` and then `/articles/quantum-computing`.
+3. Open the generated API docs at `http://localhost:8000/docs`.
+
+A longer walkthrough is in [Get the MVP running](docs/tutorials/getting-started.md).
+
+## Demo accounts
+
+Sign-in is email-only. There is no password. Open `/signin` and continue as one of:
 
 - `contributor@example.com`
 - `reviewer@example.com`
 - `admin@example.com`
 
-Use the frontend sign-in route at `/signin` to create an MVP session cookie.
+These accounts are seeded demo users, not production identity. See [Sign in and use roles](docs/how-to/sign-in-and-roles.md).
 
-## Current Workflow
+## Contribute
 
-1. Sign in through `/signin`.
-2. Contributors can submit article improvements and source proposals from article pages.
-3. Reviewers can inspect `/review`, filter the queue, self-assign items, and approve or reject with notes.
-4. Contributors can inspect `/contributors` to see the status of their submissions.
-5. Admins can inspect `/admin` for recent audit events, active sessions, queue activity, and session revocation.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for how to change code and docs together.
 
-### Database
+## Documentation
 
-```bash
-docker compose up postgres
-```
+Start at [docs/README.md](docs/README.md). That index maps tutorials, how-to guides, reference, and explanation.
 
-The frontend expects the API at `http://localhost:8000` by default.
+## License
 
-## Repository Structure
-
-- `docs/context/`: product, architecture, and roadmap specifications.
-- `docs/standards/`: API, AI, testing, and documentation rules.
-- `docs/execution/`: task execution history and validation notes.
-
----
+[MIT](LICENSE)

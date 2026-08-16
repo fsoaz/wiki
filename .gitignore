@@ -11,5 +11,6 @@ coverage/
 apps/web/.next/
 apps/web/node_modules/
 apps/api/.venv/
-
-docs/
+apps/api/*.db
+apps/api/*.db-wal
+apps/api/*.db-shm

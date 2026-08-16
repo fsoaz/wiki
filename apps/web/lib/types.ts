@@ -47,6 +47,34 @@ export type ArticleChatResponse = {
   reasoning: string[];
 };
 
+export type ConfidenceMetrics = {
+  overall_score: number;
+  source_quality_score: number;
+  cross_source_agreement_score: number;
+  freshness_score: number;
+  coverage_score: number;
+  human_review_score: number;
+  computed_at: string;
+};
+
+export type Contradiction = {
+  id: string;
+  contradiction_type: string;
+  severity: string;
+  status: string;
+};
+
+export type Claim = {
+  id: string;
+  claim_text: string;
+  claim_type: string;
+  section_key: string;
+  status: string;
+  confidence: number;
+  confidence_metrics?: ConfidenceMetrics | null;
+  contradictions: Contradiction[];
+};
+
 export type ArticleSuggestion = {
   id: string;
   article_slug: string;
@@ -148,5 +176,6 @@ export type AuthSessionInfo = {
   id: string;
   user_email: string;
   user_role: string;
+  expires_at: string;
   created_at: string;
 };

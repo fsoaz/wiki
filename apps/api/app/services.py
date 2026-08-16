@@ -19,6 +19,13 @@ def summarize_articles(articles: list[Article]) -> list[ArticleSummary]:
 
 def build_search_response(session: Session, query: str) -> SearchResponse:
     articles = list(search_articles(session, query))
+    if not articles:
+        return SearchResponse(
+            answer="No articles are available.",
+            confidence_score=0.0,
+            sources=[],
+            articles=[],
+        )
     lead = articles[0]
     answer = (
         f"{lead.title} is the strongest current match for '{query}'. "
