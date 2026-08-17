@@ -1,4 +1,19 @@
+<div align="center">
+
 # WikiAI
+
+**The most transparent way to ask for knowledge.**
+
+Canonical articles, claim-level citations, verification dates, and grounded AI answers in one trust-centric interface.
+
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%3E%3D18.18-339933?logo=node.js&logoColor=white)](package.json)
+[![Python](https://img.shields.io/badge/python-%3E%3D3.12-3776AB?logo=python&logoColor=white)](apps/api/pyproject.toml)
+[![Status](https://img.shields.io/badge/status-MVP-orange)](docs/reference/current-mvp.md)
+
+</div>
+
+![WikiAI homepage](docs/assets/screenshot.png)
 
 WikiAI is an AI-powered encyclopedia MVP. The product is a public [epistemic database](docs/glossary.md#epistemic-database): machine-readable articles, [claims](docs/glossary.md#claim), citations, and trust metadata. The website is one view into that database.
 
