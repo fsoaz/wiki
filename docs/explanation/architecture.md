@@ -572,7 +572,7 @@ Junction table linking articles to the entities they cover.
 Route contracts for the shipped read APIs. Full request and error detail is in the [API reference](../reference/api.md).
 
 | Endpoint | Output |
-|----------|--------|
+| --- | --- |
 | `GET /api/v1/articles/{slug}/claims` | Atomic claims for an article with per-claim confidence and citations |
 | `GET /api/v1/claims/{id}` | Single claim with full citation chain |
 | `GET /api/v1/entities` | All entities in the knowledge graph |

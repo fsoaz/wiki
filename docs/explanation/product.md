@@ -78,11 +78,13 @@ Secondary audiences:
 ### Homepage
 
 Purpose:
+
 - establish trust quickly
 - drive search-led discovery
 - explain why WikiAI is different
 
 Key modules:
+
 - natural-language search bar
 - featured verified topics
 - recently updated articles

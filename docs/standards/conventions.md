@@ -57,3 +57,4 @@ Use sparingly:
 - Do not invent rate limits, auth factors, or infrastructure that the MVP does not implement.
 - Do not publish placeholder text ("TODO: fill this in later") in hub docs.
 - Update [CHANGELOG.md](../../CHANGELOG.md) for user-visible API or workflow changes. Commit messages are not the changelog.
+- Run `npm run check:docs` before submitting documentation. It runs Markdown linting, local and external link checks, and spell checking.

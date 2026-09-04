@@ -6,7 +6,7 @@
 
 Validation performed:
 
-- ran backend tests: `cd apps/api && uv run pytest -q` (33 passed)
+- ran backend tests: `cd apps/api && uv run pytest -q` (33 passed at the time)
 
 Not performed:
 

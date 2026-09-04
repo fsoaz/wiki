@@ -1,4 +1,4 @@
-# WikiAI System Architecture
+# Architecture moved
 
 This file moved to [docs/explanation/architecture.md](../explanation/architecture.md).
 

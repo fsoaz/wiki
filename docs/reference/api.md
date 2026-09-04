@@ -6,7 +6,7 @@ Narrative companion to the generated OpenAPI schema. FastAPI serves the live sch
 - ReDoc: `http://localhost:8000/redoc`
 - OpenAPI JSON: `http://localhost:8000/openapi.json`
 
-Do not hand-maintain a second OpenAPI file. If a field disagrees with `/docs`, the running app wins. Then fix this page.
+Do not hand-maintain a second OpenAPI file. FastAPI source and the generated schema at `/openapi.json` are the behavior contract. This page is the canonical narrative companion. If they disagree, update this page in the same pull request.
 
 ## Basics
 
@@ -37,7 +37,7 @@ These `detail` strings come from `HTTPException` in the running API.
 
 | HTTP | `detail` | When |
 | --- | --- | --- |
-| 401 | `Authentication required` | Missing header, or header does not start with `Bearer ` |
+| 401 | `Authentication required` | Missing header, or header does not start with `Bearer` followed by a space |
 | 401 | `Invalid session` | Token is not in `auth_sessions` |
 | 403 | `Contributor access required` | Authenticated user role is not contributor, reviewer, or admin |
 | 403 | `Reviewer access required` | Role is not reviewer or admin |
@@ -52,6 +52,203 @@ These `detail` strings come from `HTTPException` in the running API.
 | 429 | `Rate limit exceeded` | Request limit reached; see `Retry-After` |
 
 Validation errors (malformed JSON, failed query constraints) return FastAPI's standard `422` body.
+
+## Endpoint contract index
+
+This index makes the request, successful response, expected failures, and rate limit discoverable for every route. `None` means the route has no request body and no endpoint-specific limit. Response model names link to a realistic example below; `/openapi.json` remains exhaustive for every field and validation rule.
+
+| Endpoint | Request example | Success and response example | Expected failures | Rate limit |
+| --- | --- | --- | --- | --- |
+| `GET /health` | None | `200` [health](#health-response) | None | None |
+| `POST /api/v1/auth/login` | `{"email":"contributor@example.com"}` | `200` [session](#session-response) | `401`, `422`, `429` | 5/IP/minute |
+| `GET /api/v1/auth/session` | Bearer token | `200` [user](#user-response) | `401` | None |
+| `POST /api/v1/auth/logout` | Bearer token | `204` with no body | `401` | None |
+| `GET /api/v1/articles` | None | `200` [article summaries](#article-summary-response) | None | None |
+| `GET /api/v1/articles/{slug}` | `quantum-computing` | `200` [article](#article-response) | `404` | None |
+| `GET /api/v1/search` | `?q=quantum` | `200` [search](#search-response) | `422` | None |
+| `POST /api/v1/articles/{slug}/chat` | `{"question":"What limits useful quantum computation?"}` | `200` [chat](#chat-response) | `404`, `422` | None |
+| `GET /api/v1/articles/{slug}/suggestions` | `quantum-computing` | `200` [public suggestions](#public-suggestions-response) | `404` | None |
+| `GET /api/v1/articles/{slug}/claims` | `quantum-computing` | `200` [claims](#claims-response) | `404` | None |
+| `GET /api/v1/claims/{claim_id}` | Claim UUID | `200` [claim](#claim-response) | `404` | None |
+| `GET /api/v1/entities` | None | `200` [entities](#entities-response) | None | None |
+| `GET /api/v1/entities/{slug}` | `quantum-computing` | `200` [entity graph](#entity-graph-response) | `404` | None |
+| `GET /api/v1/articles/{slug}/jsonld` | `quantum-computing` | `200` [article JSON-LD](#article-json-ld-response) | `404` | None |
+| `GET /api/v1/export` | `?format=jsonld&limit=100&offset=0` | `200` [export JSON-LD](#export-json-ld-response), headers `X-Total-Count` and optional `Link` | `422`, `429` | 10/IP/minute |
+| `POST /api/v1/articles/{slug}/suggestions` | [suggestion request](#suggestion-request) | `201` [suggestion](#suggestion-response) | `401`, `403`, `404`, `422`, `429` | 20/user/hour |
+| `POST /api/v1/articles/{slug}/sources` | [source request](#source-request) | `201` [source submission](#source-submission-response) | `401`, `403`, `404`, `422`, `429` | 20/user/hour |
+| `GET /api/v1/contributors/overview` | Bearer token | `200` [contributor overview](#contributor-overview-response) | `401`, `403` | None |
+| `GET /api/v1/reviews/queue` | Bearer token; optional `?status=pending&subject_type=suggestion` | `200` [review queue](#review-queue-response) | `401`, `403` | None |
+| `GET /api/v1/reviews/overview` | Bearer token; optional queue filters | `200` [reviewer overview](#reviewer-overview-response) | `401`, `403` | None |
+| `POST /api/v1/reviews/queue/{queue_item_id}/assign` | Bearer token | `200` [assignment](#assignment-response) | `401`, `403`, `404`, `409` | None |
+| `POST /api/v1/reviews/queue/{queue_item_id}/decision` | `{"decision":"approved","notes":"Evidence is sufficient."}` | `200` [decision](#decision-response) | `401`, `403`, `404`, `409`, `422` | None |
+| `GET /api/v1/admin/overview` | Admin Bearer token | `200` [admin overview](#admin-overview-response) | `401`, `403` | None |
+| `GET /api/v1/admin/audit` | Admin Bearer token; optional `?limit=50&action=login` | `200` [audit entries](#audit-entries-response) | `401`, `403`, `422` | None |
+| `GET /api/v1/admin/sessions` | Admin Bearer token; optional `?limit=100` | `200` [session list](#session-list-response) | `401`, `403`, `422` | None |
+| `POST /api/v1/admin/sessions/{session_id}/revoke` | Admin Bearer token | `200` [revoke result](#revoke-result-response) | `401`, `403` | None |
+
+### Request examples
+
+#### Suggestion request
+
+```json
+{"suggestion_type":"correction","summary":"Clarify error-correction overhead.","proposed_text":"Add a sentence about error-correction overhead."}
+```
+
+#### Source request
+
+```json
+{"title":"Quantum computing overview","publisher":"National Institute of Standards and Technology","url":"https://www.nist.gov/quantum-information-science","rationale":"Use this primary source to support the introductory section."}
+```
+
+### Response examples
+
+The examples omit volatile IDs and timestamps only when they do not affect the shape. All fields appear in generated OpenAPI schemas.
+
+#### Health response
+
+```json
+{"status":"ok","environment":"development"}
+```
+
+#### User response
+
+```json
+{"id":"user-id","email":"contributor@example.com","display_name":"Contributor","role":"contributor"}
+```
+
+#### Session response
+
+```json
+{"token":"wikiai_example","expires_at":"2026-09-05T12:00:00+00:00","user":{"id":"user-id","email":"contributor@example.com","display_name":"Contributor","role":"contributor"}}
+```
+
+#### Article summary response
+
+```json
+[{"slug":"quantum-computing","title":"Quantum Computing","summary":"An introduction to quantum computing.","confidence_score":0.86,"last_verified_at":"2026-06-01"}]
+```
+
+#### Article response
+
+```json
+{"slug":"quantum-computing","title":"Quantum Computing","summary":"An introduction to quantum computing.","confidence_score":0.86,"last_verified_at":"2026-06-01","verification_status":"verified","related_topics":["Cryptography"],"sections":[{"heading":"Overview","content":"Quantum computing uses quantum-mechanical effects.","citations":["source-id"]}],"timeline":[],"sources":[{"id":"source-id","title":"Quantum computing overview","publisher":"National Institute of Standards and Technology","tier":"A","url":"https://www.nist.gov/quantum-information-science","published_at":"2024-01-01"}],"revision_count":1}
+```
+
+#### Search response
+
+```json
+{"answer":"Quantum computing uses quantum-mechanical effects to process information.","confidence_score":0.86,"sources":[],"articles":[{"slug":"quantum-computing","title":"Quantum Computing","summary":"An introduction to quantum computing.","confidence_score":0.86,"last_verified_at":"2026-06-01"}]}
+```
+
+#### Chat response
+
+```json
+{"answer":"Useful quantum computation is limited by noise and error-correction overhead.","confidence_score":0.86,"citations":[],"reasoning":["Answer derived from the article content."]}
+```
+
+#### Public suggestions response
+
+```json
+[{"id":"suggestion-id","article_slug":"quantum-computing","contributor_name":"Contributor","suggestion_type":"correction","summary":"Clarify error-correction overhead.","proposed_text":"Add a sentence about error-correction overhead.","source_url":null,"status":"approved","created_at":"2026-09-04T12:00:00+00:00"}]
+```
+
+#### Claims response
+
+```json
+[{"id":"claim-id","article_slug":"quantum-computing","claim_text":"Quantum computers use qubits.","claim_type":"factual","section_key":"overview","status":"active","confidence":0.95,"citations":[{"id":"citation-id","source_id":"source-id","evidence_span":"Quantum computers use qubits.","support_type":"supports"}],"confidence_metrics":{"id":"metric-id","subject_type":"claim","subject_id":"claim-id","overall_score":0.95,"source_quality_score":0.95,"cross_source_agreement_score":1.0,"freshness_score":1.0,"coverage_score":1.0,"human_review_score":1.0,"computed_at":"2026-09-04T12:00:00+00:00"},"contradictions":[]}]
+```
+
+#### Claim response
+
+The claim endpoint returns one object with the same shape as an item in [claims response](#claims-response).
+
+#### Entities response
+
+```json
+[{"id":"entity-id","name":"Quantum computing","entity_type":"technology","canonical_slug":"quantum-computing","description":"A computing paradigm that uses quantum effects."}]
+```
+
+#### Entity graph response
+
+```json
+{"entity":{"id":"entity-id","name":"Quantum computing","entity_type":"technology","canonical_slug":"quantum-computing","description":"A computing paradigm that uses quantum effects."},"relationships":[{"id":"relationship-id","subject_slug":"quantum-computing","subject_name":"Quantum computing","predicate":"uses","object_slug":"qubit","object_name":"Qubit","confidence":0.95}],"article_slugs":["quantum-computing"]}
+```
+
+#### Article JSON-LD response
+
+```json
+{"@context":"https://schema.org","@type":"Article","@id":"/articles/quantum-computing","name":"Quantum Computing","description":"An introduction to quantum computing.","dateModified":"2026-06-01","creditText":"confidence:0.86","articleSection":[],"citation":[]}
+```
+
+#### Export JSON-LD response
+
+```json
+{"@context":"https://schema.org","@graph":[]}
+```
+
+#### Suggestion response
+
+The successful response has the [public suggestion](#public-suggestions-response) shape plus `contributor_email`.
+
+#### Source submission response
+
+```json
+{"id":"source-submission-id","article_slug":"quantum-computing","contributor_name":"Contributor","contributor_email":"contributor@example.com","title":"Quantum computing overview","publisher":"National Institute of Standards and Technology","url":"https://www.nist.gov/quantum-information-science","rationale":"Use this primary source to support the introductory section.","status":"pending","created_at":"2026-09-04T12:00:00+00:00"}
+```
+
+#### Contributor overview response
+
+```json
+{"contributor_email":"contributor@example.com","suggestion_count":1,"source_submission_count":0,"suggestions":[],"source_submissions":[]}
+```
+
+#### Review queue response
+
+```json
+[{"id":"queue-id","article_slug":"quantum-computing","article_title":"Quantum Computing","subject_type":"suggestion","subject_id":"suggestion-id","priority":"normal","status":"pending","assigned_reviewer_email":null,"summary":"Clarify error-correction overhead.","contributor_name":"Contributor","contributor_email":"contributor@example.com","created_at":"2026-09-04T12:00:00+00:00","decisions":[]}]
+```
+
+#### Reviewer overview response
+
+```json
+{"pending_count":1,"approved_count":0,"rejected_count":0,"items":[]}
+```
+
+#### Assignment response
+
+```json
+{"queue_item_id":"queue-id","assigned_reviewer_email":"reviewer@example.com","status":"pending"}
+```
+
+#### Decision response
+
+```json
+{"id":"decision-id","queue_item_id":"queue-id","reviewer_email":"reviewer@example.com","decision":"approved","notes":"Evidence is sufficient.","created_at":"2026-09-04T12:00:00+00:00"}
+```
+
+#### Admin overview response
+
+```json
+{"audit_event_count":1,"review_queue_count":1,"active_session_count":1,"recent_audit_entries":[]}
+```
+
+#### Audit entries response
+
+```json
+[{"id":"audit-id","actor_email":"admin@example.com","actor_role":"admin","action":"session_revoked","subject_type":"auth_session","subject_id":"session-id","details_json":"{}","created_at":"2026-09-04T12:00:00+00:00"}]
+```
+
+#### Session list response
+
+```json
+[{"id":"session-id","user_email":"contributor@example.com","user_role":"contributor","expires_at":"2026-09-05T12:00:00+00:00","created_at":"2026-09-04T12:00:00+00:00"}]
+```
+
+#### Revoke result response
+
+```json
+{"ok":true}
+```
 
 ## Public read
 

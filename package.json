@@ -7,7 +7,15 @@
   "scripts": {
     "dev:web": "npm run dev --workspace @wikiai/web",
     "build:web": "npm run build --workspace @wikiai/web",
-    "lint:web": "npm run lint --workspace @wikiai/web"
+    "lint:web": "npm run lint --workspace @wikiai/web",
+    "lint:docs": "markdownlint-cli2 README.md CONTRIBUTING.md CHANGELOG.md 'docs/**/*.md'",
+    "check:links": "markdown-link-check --config .markdown-link-check.json README.md CONTRIBUTING.md CHANGELOG.md docs/**/*.md",
+    "check:spelling": "cspell --config cspell.json README.md CONTRIBUTING.md CHANGELOG.md docs/**/*.md",
+    "check:docs": "npm run lint:docs && npm run check:links && npm run check:spelling"
+  },
+  "devDependencies": {
+    "cspell": "^10.2.2",
+    "markdown-link-check": "^3.15.0",
+    "markdownlint-cli2": "^0.23.2"
   }
 }
-

@@ -32,7 +32,7 @@ This should be classified as:
 
 ### Security
 
-A security review on 2026-08-16 raised 16 findings. All are remediated; see the changelog and [security](../reference/security.md) for the shipped controls. Verified by 52 passing API tests plus direct probes of session hashing, expiry, and the session cap.
+A security review on 2026-08-16 raised 16 findings. All are remediated; see the changelog and [security](../reference/security.md) for the shipped controls. The security review recorded 52 passing API tests plus direct probes of session hashing, expiry, and the session cap. This is historical evidence, not the current suite result; see [test evidence](test_evidence.md).
 
 These were accepted rather than fixed. They are documented under [known limitations](../reference/security.md#known-limitations), not open work items:
 

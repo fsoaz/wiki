@@ -39,6 +39,7 @@ uv run pytest
 - Write in Markdown. Put learning content in `docs/tutorials/`, goal-oriented steps in `docs/how-to/`, exhaustive facts in `docs/reference/`, and conceptual material in `docs/explanation/`.
 - Update [CHANGELOG.md](CHANGELOG.md) when user-visible API or workflow behavior changes.
 - Define jargon on first use, or link to the [glossary](docs/glossary.md).
+- Run `npm run check:docs` before you submit documentation changes.
 
 ## Pull requests
 

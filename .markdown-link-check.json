@@ -1,0 +1,9 @@
+{
+  "ignorePatterns": [
+    {
+      "pattern": "^http://localhost(:[0-9]+)?/"
+    }
+  ],
+  "retryOn429": true,
+  "timeout": "10000"
+}

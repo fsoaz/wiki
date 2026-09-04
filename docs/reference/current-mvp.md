@@ -1,6 +1,6 @@
 # Current MVP
 
-This page is the source of truth for **what the running code does**. Target design lives in [architecture](../explanation/architecture.md). Do not treat that document as a description of this build.
+This page is the canonical narrative for **what the running code does**. The FastAPI source and generated OpenAPI schema are the behavior contract if they disagree with this page. Target design lives in [architecture](../explanation/architecture.md). Do not treat that document as a description of this build.
 
 ## Applications
 
